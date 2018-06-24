@@ -385,6 +385,9 @@ void *worker(void *p1) {
         char *out = (char*)malloc(NONCESIZE * gc->load);
 
         for(;;) {
+                struct timeval kernelStart, kernelEnd;
+                gettimeofday(&kernelStart,NULL);
+		
                 pthread_mutex_lock(&gc->gpulock);
 
 		read(randfd, nonces, NONCESIZE);
@@ -408,24 +411,17 @@ void *worker(void *p1) {
                         exit(1);
                 }
 
-                struct timeval kernelStart, kernelEnd;
-                gettimeofday(&kernelStart,NULL);
 #ifdef CLWAIT			
                 usleep(gc->waitus * 0.95);
 #endif
 
                 clFinish(gc->commands);
 
-                gettimeofday(&kernelEnd,NULL);
-                unsigned long time_in_micros = 1000000 * (kernelEnd.tv_sec - kernelStart.tv_sec) + (kernelEnd.tv_usec - kernelStart.tv_usec);
-                gc->waitus = time_in_micros;
-
                 err = clEnqueueReadBuffer( gc->commands, gc->output, CL_TRUE, 0, 8 * gc->load, out, 0, NULL, NULL );
                 if (err != CL_SUCCESS) {
                         printf("Error: Failed to read output array! %d\n", err);
                         exit(1);
                 }
-		gc->blocksdone++;
 
                 pthread_mutex_unlock(&gc->gpulock);
 
@@ -456,6 +452,11 @@ void *worker(void *p1) {
 				while(submitnonce(submit) == -1);
 			}
 		}
+		
+                gettimeofday(&kernelEnd,NULL);
+                unsigned long time_in_micros = 1000000 * (kernelEnd.tv_sec - kernelStart.tv_sec) + (kernelEnd.tv_usec - kernelStart.tv_usec);
+                gc->waitus = time_in_micros;
+                gc->blocksdone++;
 	}
 }
 
